@@ -1,0 +1,1078 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>LCS Plagiarism Detector</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet"/>
+<style>
+  :root {
+    --bg: #080b12;
+    --bg2: #0d1220;
+    --bg3: #111827;
+    --surface: #161d2e;
+    --surface2: #1c2540;
+    --border: rgba(255,255,255,0.06);
+    --border2: rgba(255,255,255,0.12);
+    --accent: #4f8ef7;
+    --accent2: #38e2a0;
+    --accent3: #f7c948;
+    --danger: #f75b5b;
+    --warn: #f7a948;
+    --text: #eef1f8;
+    --text2: #8b96b0;
+    --text3: #4a5470;
+    --glow-a: rgba(79,142,247,0.15);
+    --glow-b: rgba(56,226,160,0.15);
+    --font: 'Syne', sans-serif;
+    --mono: 'JetBrains Mono', monospace;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: var(--font);
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Background grid */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(79,142,247,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(79,142,247,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* Ambient glows */
+  .glow-orb {
+    position: fixed;
+    border-radius: 50%;
+    filter: blur(80px);
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0.35;
+  }
+  .glow-orb-1 { width: 400px; height: 400px; background: rgba(79,142,247,0.2); top: -100px; left: -100px; }
+  .glow-orb-2 { width: 350px; height: 350px; background: rgba(56,226,160,0.15); bottom: -80px; right: -80px; }
+  .glow-orb-3 { width: 250px; height: 250px; background: rgba(247,201,72,0.1); top: 40%; left: 50%; transform: translateX(-50%); }
+
+  .wrapper { position: relative; z-index: 1; max-width: 1100px; margin: 0 auto; padding: 0 24px 80px; }
+
+  /* HEADER */
+  header {
+    padding: 40px 0 48px;
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 40px;
+    animation: fadeUp 0.6s ease both;
+  }
+  .header-left {}
+  .logo-tag {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--accent);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .logo-tag::before {
+    content: '';
+    display: inline-block;
+    width: 20px;
+    height: 1px;
+    background: var(--accent);
+  }
+  h1 {
+    font-size: clamp(32px, 5vw, 52px);
+    font-weight: 800;
+    line-height: 1.05;
+    letter-spacing: -0.02em;
+    background: linear-gradient(135deg, #eef1f8 30%, #8b96b0);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  h1 span { color: var(--accent); -webkit-text-fill-color: var(--accent); }
+  .header-meta {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text3);
+    text-align: right;
+    line-height: 1.8;
+  }
+  .header-meta strong { color: var(--text2); font-weight: 400; }
+
+  /* SAMPLE PILLS */
+  .sample-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 28px;
+    flex-wrap: wrap;
+    animation: fadeUp 0.6s 0.1s ease both;
+  }
+  .sample-label {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text3);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+  .sample-pill {
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 6px 14px;
+    border-radius: 99px;
+    border: 1px solid var(--border2);
+    background: var(--surface);
+    color: var(--text2);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .sample-pill:hover { border-color: var(--accent); color: var(--accent); background: rgba(79,142,247,0.08); }
+
+  /* INPUT GRID */
+  .input-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    margin-bottom: 20px;
+    animation: fadeUp 0.6s 0.15s ease both;
+  }
+  @media (max-width: 700px) { .input-grid { grid-template-columns: 1fr; } }
+
+  .doc-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 20px;
+    position: relative;
+    transition: border-color 0.2s;
+  }
+  .doc-panel:focus-within { border-color: var(--border2); }
+  .doc-panel.doc-a:focus-within { box-shadow: 0 0 0 1px rgba(79,142,247,0.2), 0 8px 32px rgba(79,142,247,0.06); border-color: rgba(79,142,247,0.4); }
+  .doc-panel.doc-b:focus-within { box-shadow: 0 0 0 1px rgba(56,226,160,0.2), 0 8px 32px rgba(56,226,160,0.06); border-color: rgba(56,226,160,0.4); }
+  .doc-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 14px;
+  }
+  .doc-badge {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .doc-badge-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+  }
+  .doc-a .doc-badge-dot { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+  .doc-b .doc-badge-dot { background: var(--accent2); box-shadow: 0 0 8px var(--accent2); }
+  .doc-a .doc-badge { color: var(--accent); }
+  .doc-b .doc-badge { color: var(--accent2); }
+  .doc-count {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text3);
+  }
+  textarea {
+    width: 100%;
+    height: 160px;
+    resize: vertical;
+    font-family: var(--mono);
+    font-size: 13px;
+    line-height: 1.7;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px;
+    color: var(--text);
+    outline: none;
+    transition: border-color 0.2s;
+    caret-color: var(--accent);
+  }
+  textarea::placeholder { color: var(--text3); }
+  .doc-a textarea:focus { border-color: rgba(79,142,247,0.4); }
+  .doc-b textarea:focus { border-color: rgba(56,226,160,0.4); }
+
+  /* CONTROLS BAR */
+  .controls-bar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 32px;
+    flex-wrap: wrap;
+    animation: fadeUp 0.6s 0.2s ease both;
+  }
+  .mode-group {
+    display: flex;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 99px;
+    padding: 4px;
+    gap: 2px;
+  }
+  .mode-btn {
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 6px 16px;
+    border-radius: 99px;
+    border: none;
+    background: transparent;
+    color: var(--text2);
+    cursor: pointer;
+    letter-spacing: 0.05em;
+    transition: all 0.2s;
+  }
+  .mode-btn.active {
+    background: var(--accent);
+    color: #fff;
+    box-shadow: 0 2px 12px rgba(79,142,247,0.4);
+  }
+  .threshold-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: auto;
+  }
+  .threshold-label {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text3);
+  }
+  .analyze-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--font);
+    font-size: 14px;
+    font-weight: 700;
+    padding: 12px 28px;
+    border-radius: 99px;
+    border: none;
+    background: linear-gradient(135deg, var(--accent), #7b5ef8);
+    color: #fff;
+    cursor: pointer;
+    letter-spacing: 0.02em;
+    transition: all 0.2s;
+    box-shadow: 0 4px 20px rgba(79,142,247,0.35);
+    position: relative;
+    overflow: hidden;
+  }
+  .analyze-btn::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, rgba(255,255,255,0.15), transparent);
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+  .analyze-btn:hover::before { opacity: 1; }
+  .analyze-btn:hover { transform: translateY(-1px); box-shadow: 0 6px 28px rgba(79,142,247,0.5); }
+  .analyze-btn:active { transform: scale(0.97); }
+  .analyze-btn .arrow { transition: transform 0.2s; }
+  .analyze-btn:hover .arrow { transform: translateX(3px); }
+
+  /* RESULTS */
+  #results { display: none; }
+  #results.show { display: block; animation: fadeUp 0.5s ease both; }
+
+  /* SCORE HERO */
+  .score-hero {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 32px;
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    gap: 32px;
+    margin-bottom: 20px;
+    position: relative;
+    overflow: hidden;
+  }
+  .score-hero::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--verdict-color, var(--accent)), transparent);
+  }
+  .score-circle {
+    width: 110px;
+    height: 110px;
+    position: relative;
+    flex-shrink: 0;
+  }
+  .score-circle svg { transform: rotate(-90deg); }
+  .score-circle-bg { fill: none; stroke: var(--bg2); stroke-width: 8; }
+  .score-circle-fill {
+    fill: none;
+    stroke-width: 8;
+    stroke-linecap: round;
+    stroke-dasharray: 314;
+    stroke-dashoffset: 314;
+    transition: stroke-dashoffset 1.2s cubic-bezier(.4,0,.2,1), stroke 0.4s;
+  }
+  .score-circle-label {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+  .score-pct {
+    font-size: 24px;
+    font-weight: 800;
+    color: var(--text);
+    letter-spacing: -0.02em;
+    line-height: 1;
+  }
+  .score-unit { font-family: var(--mono); font-size: 10px; color: var(--text3); margin-top: 2px; }
+
+  .score-center { flex: 1; }
+  .verdict-title {
+    font-size: 20px;
+    font-weight: 700;
+    margin-bottom: 6px;
+    color: var(--verdict-color, var(--text));
+  }
+  .verdict-sub {
+    font-size: 13px;
+    color: var(--text2);
+    font-family: var(--mono);
+    margin-bottom: 16px;
+  }
+  .progress-track {
+    height: 6px;
+    background: var(--bg2);
+    border-radius: 99px;
+    overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%;
+    border-radius: 99px;
+    transition: width 1.2s cubic-bezier(.4,0,.2,1);
+    width: 0;
+    background: linear-gradient(90deg, var(--verdict-color, var(--accent)), rgba(255,255,255,0.3));
+  }
+  .score-stats {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    text-align: right;
+  }
+  .score-stat { }
+  .score-stat-num {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--text);
+    line-height: 1;
+  }
+  .score-stat-lbl {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text3);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+
+  /* STATS ROW */
+  .stats-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+  @media (max-width: 600px) { .stats-row { grid-template-columns: repeat(2,1fr); } }
+  .stat-tile {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 18px;
+    transition: border-color 0.2s;
+  }
+  .stat-tile:hover { border-color: var(--border2); }
+  .stat-tile-icon {
+    font-size: 18px;
+    margin-bottom: 10px;
+    display: block;
+  }
+  .stat-tile-val {
+    font-size: 26px;
+    font-weight: 800;
+    color: var(--text);
+    letter-spacing: -0.02em;
+    line-height: 1;
+    margin-bottom: 4px;
+  }
+  .stat-tile-lbl {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--text3);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+
+  /* BOTTOM GRID */
+  .bottom-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    margin-bottom: 20px;
+  }
+  @media (max-width: 700px) { .bottom-grid { grid-template-columns: 1fr; } }
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 22px;
+  }
+  .panel-title {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text3);
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .panel-title-dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: currentColor;
+  }
+  .panel-title.blue { color: var(--accent); }
+  .panel-title.green { color: var(--accent2); }
+
+  .text-display {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    line-height: 1.9;
+    color: var(--text2);
+    word-break: break-word;
+    max-height: 180px;
+    overflow-y: auto;
+    padding-right: 4px;
+  }
+  .text-display::-webkit-scrollbar { width: 3px; }
+  .text-display::-webkit-scrollbar-track { background: transparent; }
+  .text-display::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 99px; }
+
+  mark.hl-a {
+    background: rgba(79,142,247,0.25);
+    color: #93bbff;
+    border-radius: 3px;
+    padding: 1px 3px;
+    text-decoration: none;
+  }
+  mark.hl-b {
+    background: rgba(56,226,160,0.2);
+    color: #5effc4;
+    border-radius: 3px;
+    padding: 1px 3px;
+  }
+
+  /* LCS OUTPUT */
+  .lcs-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 22px;
+    margin-bottom: 20px;
+  }
+  .lcs-output {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--accent3);
+    background: var(--bg2);
+    border: 1px solid rgba(247,201,72,0.12);
+    border-radius: 10px;
+    padding: 14px;
+    line-height: 1.8;
+    word-break: break-all;
+    max-height: 100px;
+    overflow-y: auto;
+  }
+  .lcs-length-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(247,201,72,0.1);
+    border: 1px solid rgba(247,201,72,0.25);
+    color: var(--accent3);
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 4px 12px;
+    border-radius: 99px;
+    margin-left: auto;
+  }
+
+  /* DP MATRIX */
+  .matrix-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 22px;
+    margin-bottom: 20px;
+  }
+  .matrix-scroll { overflow-x: auto; padding-bottom: 8px; }
+  .matrix-scroll::-webkit-scrollbar { height: 4px; }
+  .matrix-scroll::-webkit-scrollbar-track { background: transparent; }
+  .matrix-scroll::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 99px; }
+  table.dp {
+    border-collapse: separate;
+    border-spacing: 3px;
+    font-family: var(--mono);
+    font-size: 11px;
+  }
+  table.dp td {
+    width: 30px; height: 30px;
+    text-align: center;
+    border-radius: 6px;
+    background: var(--bg2);
+    color: var(--text3);
+    transition: background 0.3s, color 0.3s;
+  }
+  table.dp td.hdr {
+    background: transparent;
+    color: var(--text3);
+    font-weight: 500;
+    font-size: 10px;
+  }
+  table.dp td.dp-path {
+    background: rgba(79,142,247,0.15);
+    color: #93bbff;
+  }
+  table.dp td.dp-match {
+    background: rgba(56,226,160,0.2);
+    color: #5effc4;
+    font-weight: 600;
+  }
+  .dp-legend {
+    display: flex;
+    gap: 20px;
+    margin-top: 12px;
+    flex-wrap: wrap;
+  }
+  .dp-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text3);
+  }
+  .dp-legend-swatch {
+    width: 14px; height: 14px; border-radius: 4px;
+  }
+
+  /* ALGO EXPLAINER */
+  .algo-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 22px;
+    margin-bottom: 20px;
+  }
+  .algo-steps {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 12px;
+    margin-top: 16px;
+  }
+  @media (max-width: 600px) { .algo-steps { grid-template-columns: 1fr; } }
+  .algo-step {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+  }
+  .algo-step-num {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--accent);
+    letter-spacing: 0.1em;
+    margin-bottom: 8px;
+  }
+  .algo-step-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 6px;
+  }
+  .algo-step-desc {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text3);
+    line-height: 1.6;
+  }
+
+  /* FOOTER */
+  footer {
+    padding-top: 32px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: gap;
+  }
+  .footer-left { font-family: var(--mono); font-size: 11px; color: var(--text3); }
+  .footer-right { font-family: var(--mono); font-size: 11px; color: var(--text3); text-align: right; }
+  .complexity-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 99px;
+    padding: 5px 14px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--accent3);
+    margin-top: 6px;
+  }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
+  .pulsing { animation: pulse 2s ease infinite; }
+
+  /* Scanning animation for analyze button */
+  @keyframes scan {
+    0% { left: -100%; }
+    100% { left: 200%; }
+  }
+  .analyze-btn .scan-line {
+    position: absolute;
+    top: 0; bottom: 0;
+    width: 30%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+    left: -100%;
+    animation: scan 2s ease infinite;
+  }
+  .analyze-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+  /* Responsive score hero */
+  @media (max-width: 700px) {
+    .score-hero { grid-template-columns: 1fr; text-align: center; }
+    .score-stats { text-align: center; flex-direction: row; justify-content: center; }
+  }
+</style>
+</head>
+<body>
+
+<div class="glow-orb glow-orb-1"></div>
+<div class="glow-orb glow-orb-2"></div>
+<div class="glow-orb glow-orb-3"></div>
+
+<div class="wrapper">
+
+  <!-- HEADER -->
+  <header>
+    <div class="header-left">
+      <div class="logo-tag">Algorithm Design Lab</div>
+      <h1>LCS <span>Plagiarism</span><br>Detector</h1>
+    </div>
+    <div class="header-meta">
+      <strong>Algorithm</strong> Dynamic Programming<br>
+      <strong>Complexity</strong> O(m × n)<br>
+      <strong>Space</strong> O(m × n)<br>
+      <span class="complexity-badge">
+        <svg width="8" height="8" viewBox="0 0 8 8"><circle cx="4" cy="4" r="4" fill="#f7c948"/></svg>
+        Longest Common Subsequence
+      </span>
+    </div>
+  </header>
+
+  <!-- SAMPLES -->
+  <div class="sample-row">
+    <span class="sample-label">Load sample →</span>
+    <button class="sample-pill" onclick="loadSample(0)">📄 Student essays</button>
+    <button class="sample-pill" onclick="loadSample(1)">💻 Code snippets</button>
+    <button class="sample-pill" onclick="loadSample(2)">🔬 Research abstract</button>
+    <button class="sample-pill" onclick="loadSample(3)">📰 News paraphrase</button>
+  </div>
+
+  <!-- INPUT -->
+  <div class="input-grid">
+    <div class="doc-panel doc-a">
+      <div class="doc-header">
+        <div class="doc-badge"><span class="doc-badge-dot"></span>Document A — Original</div>
+        <span class="doc-count" id="countA">0 words</span>
+      </div>
+      <textarea id="textA" placeholder="Paste the original document here…">The quick brown fox jumps over the lazy dog near the river bank. The weather was sunny and warm that afternoon. Students must understand the fundamental concepts before attempting advanced problems in algorithms.</textarea>
+    </div>
+    <div class="doc-panel doc-b">
+      <div class="doc-header">
+        <div class="doc-badge"><span class="doc-badge-dot"></span>Document B — Suspect</div>
+        <span class="doc-count" id="countB">0 words</span>
+      </div>
+      <textarea id="textB" placeholder="Paste the suspect document here…">A quick brown fox was jumping over the lazy dog near the river. It was a sunny and warm afternoon by the bank. Students need to understand fundamental concepts before trying advanced algorithmic problems.</textarea>
+    </div>
+  </div>
+
+  <!-- CONTROLS -->
+  <div class="controls-bar">
+    <div class="mode-group">
+      <button class="mode-btn active" id="modeWord" onclick="setMode('word')">Word</button>
+      <button class="mode-btn" id="modeChar" onclick="setMode('char')">Character</button>
+    </div>
+    <button class="analyze-btn" id="analyzeBtn" onclick="analyze()">
+      <div class="scan-line"></div>
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+        <circle cx="7" cy="7" r="5" stroke="white" stroke-width="1.5"/>
+        <path d="M11 11L14 14" stroke="white" stroke-width="1.5" stroke-linecap="round"/>
+      </svg>
+      Run Analysis
+      <span class="arrow">→</span>
+    </button>
+  </div>
+
+  <!-- RESULTS -->
+  <div id="results">
+
+    <!-- SCORE HERO -->
+    <div class="score-hero" id="scoreHero">
+      <div class="score-circle">
+        <svg width="110" height="110" viewBox="0 0 110 110">
+          <circle class="score-circle-bg" cx="55" cy="55" r="50"/>
+          <circle class="score-circle-fill" id="circFill" cx="55" cy="55" r="50"/>
+        </svg>
+        <div class="score-circle-label">
+          <div class="score-pct" id="scoreNum">0%</div>
+          <div class="score-unit">similarity</div>
+        </div>
+      </div>
+      <div class="score-center">
+        <div class="verdict-title" id="verdictTitle">Analyzing…</div>
+        <div class="verdict-sub" id="verdictSub"></div>
+        <div class="progress-track">
+          <div class="progress-fill" id="progressFill"></div>
+        </div>
+      </div>
+      <div class="score-stats">
+        <div class="score-stat">
+          <div class="score-stat-num" id="statLCS">—</div>
+          <div class="score-stat-lbl">LCS length</div>
+        </div>
+        <div class="score-stat">
+          <div class="score-stat-num" id="statDice">—</div>
+          <div class="score-stat-lbl">Dice coeff.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- STAT TILES -->
+    <div class="stats-row">
+      <div class="stat-tile">
+        <span class="stat-tile-icon" style="color:var(--accent)">◈</span>
+        <div class="stat-tile-val" id="tileA">—</div>
+        <div class="stat-tile-lbl">Doc A tokens</div>
+      </div>
+      <div class="stat-tile">
+        <span class="stat-tile-icon" style="color:var(--accent2)">◈</span>
+        <div class="stat-tile-val" id="tileB">—</div>
+        <div class="stat-tile-lbl">Doc B tokens</div>
+      </div>
+      <div class="stat-tile">
+        <span class="stat-tile-icon" style="color:var(--accent3)">◆</span>
+        <div class="stat-tile-val" id="tileLCS">—</div>
+        <div class="stat-tile-lbl">Common tokens</div>
+      </div>
+      <div class="stat-tile">
+        <span class="stat-tile-icon" style="color:var(--danger)">◉</span>
+        <div class="stat-tile-val" id="tileUniq">—</div>
+        <div class="stat-tile-lbl">Unique tokens</div>
+      </div>
+    </div>
+
+    <!-- HIGHLIGHTED PANELS -->
+    <div class="bottom-grid">
+      <div class="panel">
+        <div class="panel-title blue"><span class="panel-title-dot"></span>Document A — highlighted matches</div>
+        <div class="text-display" id="hlA"></div>
+      </div>
+      <div class="panel">
+        <div class="panel-title green"><span class="panel-title-dot"></span>Document B — highlighted matches</div>
+        <div class="text-display" id="hlB"></div>
+      </div>
+    </div>
+
+    <!-- LCS OUTPUT -->
+    <div class="lcs-panel">
+      <div class="panel-title" style="color:var(--accent3); justify-content:space-between;">
+        <div style="display:flex;align-items:center;gap:8px;"><span class="panel-title-dot" style="background:var(--accent3)"></span>Longest Common Subsequence</div>
+        <div class="lcs-length-badge" id="lcsLenBadge">0 tokens</div>
+      </div>
+      <div class="lcs-output" id="lcsDisplay"></div>
+    </div>
+
+    <!-- DP MATRIX -->
+    <div class="matrix-panel">
+      <div class="panel-title" style="justify-content:space-between;">
+        <div style="display:flex;align-items:center;gap:8px;"><span class="panel-title-dot" style="background:var(--text3)"></span>DP Computation Matrix <span style="font-size:10px;color:var(--text3);font-weight:400;">(first 12×12)</span></div>
+        <span style="font-family:var(--mono);font-size:10px;color:var(--text3);">dp[i][j] = length of LCS(A[0..i], B[0..j])</span>
+      </div>
+      <div class="matrix-scroll">
+        <div id="matrixContainer"></div>
+      </div>
+      <div class="dp-legend">
+        <div class="dp-legend-item"><div class="dp-legend-swatch" style="background:rgba(56,226,160,0.2);border:1px solid rgba(56,226,160,0.3)"></div> Diagonal match (A[i]=B[j])</div>
+        <div class="dp-legend-item"><div class="dp-legend-swatch" style="background:rgba(79,142,247,0.15);border:1px solid rgba(79,142,247,0.2)"></div> Non-zero (accumulated LCS)</div>
+        <div class="dp-legend-item"><div class="dp-legend-swatch" style="background:var(--bg2);border:1px solid var(--border)"></div> Zero (no common prefix)</div>
+      </div>
+    </div>
+
+    <!-- ALGO EXPLAINER -->
+    <div class="algo-panel">
+      <div class="panel-title"><span class="panel-title-dot"></span>How the algorithm works</div>
+      <div class="algo-steps">
+        <div class="algo-step">
+          <div class="algo-step-num">01 — TOKENIZE</div>
+          <div class="algo-step-title">Split into tokens</div>
+          <div class="algo-step-desc">Each document is split into words (or chars). These form sequences A[0..m] and B[0..n].</div>
+        </div>
+        <div class="algo-step">
+          <div class="algo-step-num">02 — FILL TABLE</div>
+          <div class="algo-step-title">Build DP matrix</div>
+          <div class="algo-step-desc">For each pair (i,j): if A[i]=B[j], dp[i][j]=dp[i-1][j-1]+1. Else max(dp[i-1][j], dp[i][j-1]).</div>
+        </div>
+        <div class="algo-step">
+          <div class="algo-step-num">03 — TRACEBACK</div>
+          <div class="algo-step-title">Reconstruct LCS</div>
+          <div class="algo-step-desc">Walk from dp[m][n] back to origin following the path of matches to recover the actual subsequence.</div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /results -->
+
+  <!-- FOOTER -->
+  <footer>
+    <div class="footer-left">
+      LCS Plagiarism Detector · Design &amp; Analysis of Algorithms<br>
+      <span style="color:var(--text3)">LLJ II Component — Real-World Applications</span>
+    </div>
+    <div class="footer-right">
+      <span style="color:var(--text3)">Time:</span> O(m×n) &nbsp;·&nbsp; <span style="color:var(--text3)">Space:</span> O(m×n)<br>
+      <span style="color:var(--text3)">Metric:</span> Dice similarity coefficient
+    </div>
+  </footer>
+
+</div><!-- /wrapper -->
+
+<script>
+  let mode = 'word';
+
+  const samples = [
+    {
+      a: "The quick brown fox jumps over the lazy dog near the river bank. The weather was sunny and warm that afternoon. Students must understand the fundamental concepts before attempting advanced problems in algorithms.",
+      b: "A quick brown fox was jumping over the lazy dog near the river. It was a sunny and warm afternoon by the bank. Students need to understand fundamental concepts before trying advanced algorithmic problems."
+    },
+    {
+      a: "function bubbleSort(arr) {\n  for (let i = 0; i < arr.length; i++) {\n    for (let j = 0; j < arr.length - i - 1; j++) {\n      if (arr[j] > arr[j+1]) {\n        let temp = arr[j];\n        arr[j] = arr[j+1];\n        arr[j+1] = temp;\n      }\n    }\n  }\n  return arr;\n}",
+      b: "function sortArray(nums) {\n  for (let i = 0; i < nums.length; i++) {\n    for (let j = 0; j < nums.length - 1; j++) {\n      if (nums[j] > nums[j+1]) {\n        let tmp = nums[j];\n        nums[j] = nums[j+1];\n        nums[j+1] = tmp;\n      }\n    }\n  }\n  return nums;\n}"
+    },
+    {
+      a: "This paper presents a novel deep learning approach for natural language processing. We propose a transformer-based architecture that achieves state-of-the-art results on multiple benchmarks including GLUE and SuperGLUE datasets.",
+      b: "We present a new deep learning method for natural language processing tasks. Our proposed transformer-based model achieves state-of-the-art performance on several standard benchmarks such as GLUE and SuperGLUE evaluation datasets."
+    },
+    {
+      a: "Scientists have discovered a new species of deep-sea fish in the Pacific Ocean. The creature lives at depths exceeding 3000 meters and uses bioluminescence to attract prey. Researchers from the marine biology institute published their findings in Nature.",
+      b: "A previously unknown deep-sea fish species was found in the Pacific Ocean by scientists. Living more than 3000 meters below the surface, this creature attracts its prey using bioluminescence. The marine biology institute's research team reported their discovery in Nature journal."
+    }
+  ];
+
+  function loadSample(i) {
+    document.getElementById('textA').value = samples[i].a;
+    document.getElementById('textB').value = samples[i].b;
+    updateCounts();
+  }
+
+  function setMode(m) {
+    mode = m;
+    document.getElementById('modeWord').classList.toggle('active', m === 'word');
+    document.getElementById('modeChar').classList.toggle('active', m === 'char');
+  }
+
+  function updateCounts() {
+    const a = document.getElementById('textA').value.trim();
+    const b = document.getElementById('textB').value.trim();
+    const wA = a ? a.split(/\s+/).filter(Boolean).length : 0;
+    const wB = b ? b.split(/\s+/).filter(Boolean).length : 0;
+    document.getElementById('countA').textContent = wA + ' words';
+    document.getElementById('countB').textContent = wB + ' words';
+  }
+
+  document.getElementById('textA').addEventListener('input', updateCounts);
+  document.getElementById('textB').addEventListener('input', updateCounts);
+  updateCounts();
+
+  function tokenize(text, m) {
+    if (m === 'char') return text.replace(/\s+/g, ' ').split('').filter(c => c.trim() !== '');
+    return text.toLowerCase().replace(/[^a-z0-9\s]/gi, ' ').split(/\s+/).filter(Boolean);
+  }
+
+  function computeLCS(a, b) {
+    const m = a.length, n = b.length;
+    const dp = Array.from({length: m + 1}, () => new Int32Array(n + 1));
+    for (let i = 1; i <= m; i++) {
+      for (let j = 1; j <= n; j++) {
+        if (a[i-1] === b[j-1]) dp[i][j] = dp[i-1][j-1] + 1;
+        else dp[i][j] = Math.max(dp[i-1][j], dp[i][j-1]);
+      }
+    }
+    const seqA = [], seqB = [];
+    let i = m, j = n;
+    while (i > 0 && j > 0) {
+      if (a[i-1] === b[j-1]) { seqA.unshift(i-1); seqB.unshift(j-1); i--; j--; }
+      else if (dp[i-1][j] > dp[i][j-1]) i--;
+      else j--;
+    }
+    return { dp, idxA: new Set(seqA), idxB: new Set(seqB), lcsLen: dp[m][n], seqA };
+  }
+
+  function buildHighlighted(tokens, matchIdx, cls) {
+    return tokens.map((t, i) =>
+      matchIdx.has(i)
+        ? `<mark class="${cls}">${esc(t)}</mark>`
+        : esc(t)
+    ).join(mode === 'char' ? '' : ' ');
+  }
+
+  function esc(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  function buildMatrix(dp, tokA, tokB) {
+    const rows = Math.min(tokA.length + 1, 13);
+    const cols = Math.min(tokB.length + 1, 13);
+    let html = '<table class="dp"><tr><td class="hdr"></td><td class="hdr" style="color:var(--text3)">ε</td>';
+    for (let j = 1; j < cols; j++)
+      html += `<td class="hdr" title="${esc(tokB[j-1])}">${esc(tokB[j-1].substring(0,4))}</td>`;
+    html += '</tr>';
+    for (let i = 0; i < rows; i++) {
+      html += '<tr>';
+      html += i === 0
+        ? '<td class="hdr" style="color:var(--text3)">ε</td>'
+        : `<td class="hdr" title="${esc(tokA[i-1])}">${esc(tokA[i-1].substring(0,4))}</td>`;
+      for (let j = 0; j < cols; j++) {
+        const val = dp[i][j];
+        let cls = '';
+        if (i > 0 && j > 0 && tokA[i-1] === tokB[j-1]) cls = 'dp-match';
+        else if (val > 0) cls = 'dp-path';
+        html += `<td class="${cls}">${val}</td>`;
+      }
+      html += '</tr>';
+    }
+    html += '</table>';
+    return html;
+  }
+
+  function getVerdictColor(score) {
+    if (score >= 70) return 'var(--danger)';
+    if (score >= 40) return 'var(--warn)';
+    return 'var(--accent2)';
+  }
+
+  function analyze() {
+    const tA = document.getElementById('textA').value.trim();
+    const tB = document.getElementById('textB').value.trim();
+    if (!tA || !tB) return;
+
+    const btn = document.getElementById('analyzeBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<div class="scan-line"></div><span class="pulsing">Analyzing…</span>';
+
+    setTimeout(() => {
+      const tokA = tokenize(tA, mode);
+      const tokB = tokenize(tB, mode);
+      const maxTokens = mode === 'char' ? 200 : 150;
+      const slA = tokA.slice(0, maxTokens);
+      const slB = tokB.slice(0, maxTokens);
+
+      const { dp, idxA, idxB, lcsLen, seqA } = computeLCS(slA, slB);
+      const similarity = Math.round((2 * lcsLen) / (slA.length + slB.length) * 100);
+      const dice = ((2 * lcsLen) / (slA.length + slB.length)).toFixed(3);
+      const uniq = (slA.length + slB.length) - 2 * lcsLen;
+
+      const vColor = getVerdictColor(similarity);
+      const vTitle = similarity >= 70 ? 'High Similarity Detected' : similarity >= 40 ? 'Moderate Similarity' : 'Low Similarity';
+      const vSub = similarity >= 70
+        ? 'Strong evidence of plagiarism — content is largely copied or paraphrased'
+        : similarity >= 40
+        ? 'Partial overlap found — manual review recommended'
+        : 'Documents appear largely original — minimal overlap detected';
+
+      // Set CSS var for accent line
+      document.getElementById('scoreHero').style.setProperty('--verdict-color', vColor);
+      document.getElementById('verdictTitle').style.color = vColor;
+
+      document.getElementById('scoreNum').textContent = similarity + '%';
+      document.getElementById('verdictTitle').textContent = vTitle;
+      document.getElementById('verdictSub').textContent = vSub;
+      document.getElementById('statLCS').textContent = lcsLen;
+      document.getElementById('statDice').textContent = dice;
+      document.getElementById('tileA').textContent = tokA.length;
+      document.getElementById('tileB').textContent = tokB.length;
+      document.getElementById('tileLCS').textContent = lcsLen;
+      document.getElementById('tileUniq').textContent = uniq;
+
+      const lcsTokens = seqA.map(i => slA[i]);
+      document.getElementById('lcsDisplay').textContent = lcsTokens.join(mode === 'char' ? '' : ' ') || '(no common subsequence found)';
+      document.getElementById('lcsLenBadge').textContent = lcsLen + ' tokens';
+
+      document.getElementById('hlA').innerHTML = buildHighlighted(slA, idxA, 'hl-a');
+      document.getElementById('hlB').innerHTML = buildHighlighted(slB, idxB, 'hl-b');
+      document.getElementById('matrixContainer').innerHTML = buildMatrix(dp, slA, slB);
+
+      // Animate progress
+      const fill = document.getElementById('progressFill');
+      fill.style.setProperty('--verdict-color', vColor);
+      fill.style.background = `linear-gradient(90deg, ${vColor}, rgba(255,255,255,0.25))`;
+
+      // Animate circle
+      const circ = document.getElementById('circFill');
+      circ.style.stroke = vColor;
+      const circumference = 2 * Math.PI * 50;
+      circ.style.strokeDasharray = circumference;
+
+      const res = document.getElementById('results');
+      res.classList.add('show');
+
+      setTimeout(() => {
+        fill.style.width = Math.min(similarity, 100) + '%';
+        const offset = circumference - (similarity / 100) * circumference;
+        circ.style.strokeDashoffset = offset;
+      }, 80);
+
+      btn.disabled = false;
+      btn.innerHTML = '<div class="scan-line"></div><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="5" stroke="white" stroke-width="1.5"/><path d="M11 11L14 14" stroke="white" stroke-width="1.5" stroke-linecap="round"/></svg> Run Analysis <span class="arrow">→</span>';
+
+      res.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 200);
+  }
+</script>
+</body>
+</html>
